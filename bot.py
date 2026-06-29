@@ -1,5 +1,6 @@
 import logging
 from telegram import Update
+from telegram.error import BadRequest
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
@@ -48,17 +49,27 @@ async def show(
     **kwargs,
 ) -> None:
     """
-    Delete the previous bot message (if any), send a fresh one, and store
-    the new message_id so the next call can delete it.
-    Only bot messages are managed this way — user's typed messages are kept.
+    Edit the tracked bot message in-place; falls back to send_message when
+    there is no tracked message, the edit fails, or content is unchanged.
+    Editing keeps the message at its original position — no scroll jumping.
     """
     chat_id = update.effective_chat.id
     old_id = context.user_data.get("bot_msg_id")
     if old_id:
         try:
-            await context.bot.delete_message(chat_id, old_id)
+            await context.bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=old_id,
+                text=text,
+                reply_markup=reply_markup,
+                **kwargs,
+            )
+            return  # message_id unchanged — no need to update user_data
+        except BadRequest as e:
+            if "is not modified" in str(e):
+                return  # same content — no-op, not an error
         except Exception:
-            pass  # message already gone, too old, or never existed — fine
+            pass  # too old / already deleted — fall through to send
 
     msg = await context.bot.send_message(
         chat_id, text, reply_markup=reply_markup, **kwargs
@@ -75,6 +86,14 @@ async def show_service_menu(
     await show(update, context, "👇 Xizmatni tanlang:", reply_markup=service_menu())
     context.user_data["fsm_state"] = SELECTING_SERVICE
     return SELECTING_SERVICE
+
+
+def _reset_flow(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Clear per-flow state but preserve bot_msg_id for in-place editing continuity."""
+    bot_msg_id = context.user_data.get("bot_msg_id")
+    context.user_data.clear()
+    if bot_msg_id:
+        context.user_data["bot_msg_id"] = bot_msg_id
 
 
 # ── /start — entry point ───────────────────────────────────────────────────
@@ -108,7 +127,7 @@ async def open_approve_flow(
         await update.message.reply_text("⛔ You are not authorized.")
         return ConversationHandler.END
 
-    context.user_data.clear()
+    _reset_flow(context)
     return await show_service_menu(update, context)
 
 
@@ -246,7 +265,7 @@ async def _execute_update(
             "🛑 Ma'lumotlar bazasi xatosi — loglarga qarang.",
             reply_markup=service_menu(),
         )
-        context.user_data.clear()
+        _reset_flow(context)
         context.user_data["fsm_state"] = SELECTING_SERVICE
         return SELECTING_SERVICE
 
@@ -257,7 +276,7 @@ async def _execute_update(
         else f"❌ Yozuv <b>{record_id}</b> jadvalda topilmadi: <i>{svc_cfg.table}</i>."
     )
     await show(update, context, text, parse_mode="HTML", reply_markup=service_menu())
-    context.user_data.clear()
+    _reset_flow(context)
     context.user_data["fsm_state"] = SELECTING_SERVICE
     return SELECTING_SERVICE
 
@@ -289,24 +308,12 @@ async def nav_back(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
 
 async def nav_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Abort the flow entirely and send a clean confirmation."""
+    """Abort the flow — edit the active message to a cancellation notice."""
     if update.callback_query:
         await update.callback_query.answer()
 
-    chat_id = update.effective_chat.id
-    old_id = context.user_data.get("bot_msg_id")
-    if old_id:
-        try:
-            await context.bot.delete_message(chat_id, old_id)
-        except Exception:
-            pass
-
-    context.user_data.clear()
-    await context.bot.send_message(
-        chat_id,
-        "✖ Bekor qilindi.",
-        reply_markup=main_menu_keyboard(),
-    )
+    await show(update, context, "✖ Bekor qilindi.")
+    _reset_flow(context)
     return ConversationHandler.END
 
 
