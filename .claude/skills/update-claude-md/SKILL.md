@@ -6,7 +6,7 @@ description: Refresh CLAUDE.md to reflect the current state of the codebase. Run
 Read these files: `bot.py`, `keyboards.py`, `db.py`, `config.py`, `.env.example`, `plan.md`.
 
 Overwrite `CLAUDE.md` with exactly the sections listed below and nothing else.
-After writing, run `wc -l CLAUDE.md` — if the result is over 80 lines, trim until it is.
+After writing, run `wc -l CLAUDE.md` — if the result is over 100 lines, trim until it is.
 
 ---
 
