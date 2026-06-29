@@ -52,7 +52,9 @@ source .venv/bin/activate
 python bot.py
 ```
 
-Send `/start` to your bot in Telegram. If the menu appears, everything is wired up correctly. Stop with `Ctrl+C`.
+Send `/start` to your bot in Telegram. The **"So'rovnoma/Shartnoma tasdiqlash"** button
+should appear in the keyboard area. If it does, everything is wired up correctly.
+Stop with `Ctrl+C`.
 
 ---
 
@@ -83,17 +85,27 @@ postgresql://user:password@host:5432/dbname
 
 ```
 /start
-└── Service menu
-    ├── Q1 · Questionary v1  →  send ID  →  sets status = "confirmed"
-    ├── Q2 · Questionary v2  →  send ID  →  [Approve (→6)] or [Choose status]
-    │                                              └── 3 Elma Success
-    │                                              └── 5 Pending Expert Approve
-    │                                              └── 6 Approve For Contract
-    │                                              └── 7 Cancelled
-    └── K2 · Collaboration v2  →  send ID  →  sets status_id = 8
+└─ "Salom!" + [So'rovnoma/Shartnoma tasdiqlash]   ← persistent keyboard button
+        │
+        ▼ (tap button)
+   Service menu
+   ├─ Q1 · Questionary v1  →  send ID  [⬅][✖]  →  sets status = "confirmed"
+   ├─ Q2 · Questionary v2  →  send ID  [⬅][✖]
+   │           └─ [✅ Approve → 6 Approve For Contract]  [⬅][✖]
+   │              [🔢 Choose status]
+   │                   └─ 3 Elma Success             [⬅ back to action][✖]
+   │                      5 Pending Expert Approve
+   │                      6 Approve For Contract
+   │                      7 Cancelled
+   └─ K2 · Collaboration v2  →  send ID  [⬅][✖]  →  sets status_id = 8
 ```
 
-All operations verify the record exists before reporting success.
+**Navigation:**
+- **⬅ Orqaga** — go back one step (or return to service menu).
+- **✖ Bekor qilish** — cancel the entire flow; the keyboard button remains visible.
+
+Only one bot message is visible at a time — each step deletes the previous bot message
+before sending the next one.
 
 ---
 
