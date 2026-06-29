@@ -9,6 +9,7 @@ from telegram.ext import (
     MessageHandler,
     filters,
 )
+from telegram.request import HTTPXRequest
 from config import load_config
 from db import update_status
 from keyboards import Q2_STATUSES, q2_action_menu, q2_status_menu, service_menu
@@ -198,7 +199,13 @@ async def _reply(update: Update, text: str, **kwargs) -> None:
 # ── Wiring ─────────────────────────────────────────────────────────────────
 
 def main() -> None:
-    app = Application.builder().token(config.token).build()
+    request = HTTPXRequest(
+        connect_timeout=30.0,
+        read_timeout=30.0,
+        write_timeout=30.0,
+        pool_timeout=30.0,
+    )
+    app = Application.builder().token(config.token).request(request).build()
 
     conv = ConversationHandler(
         entry_points=[CommandHandler("start", start)],
