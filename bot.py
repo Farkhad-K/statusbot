@@ -330,12 +330,29 @@ async def nav_back(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
 
 async def nav_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Abort the flow — edit the active message to a cancellation notice."""
+    """
+    Abort the flow — remove the inline prompt and re-pin the main-menu button.
+    edit_message_text can't carry a reply keyboard, so this must send a fresh
+    message (not use show()) or the persistent button never comes back after
+    the user has typed something and collapsed the keyboard.
+    """
     if update.callback_query:
         await update.callback_query.answer()
 
-    await show(update, context, "✖ Bekor qilindi.")
-    context.user_data.clear()  # full clear — next button tap starts a fresh message
+    chat_id = update.effective_chat.id
+    old_id = context.user_data.get("bot_msg_id")
+    if old_id:
+        try:
+            await context.bot.delete_message(chat_id, old_id)
+        except Exception:
+            pass  # already gone / too old — ignore
+
+    context.user_data.clear()
+    await context.bot.send_message(
+        chat_id,
+        "✖ Bekor qilindi.",
+        reply_markup=main_menu_keyboard(),
+    )
     return ConversationHandler.END
 
 
