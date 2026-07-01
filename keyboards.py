@@ -69,8 +69,8 @@ def awaiting_id_menu() -> InlineKeyboardMarkup:
 
 def q2_action_menu() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("✅  Approve  →  6 Approve For Contract", callback_data="q2:approve")],
-        [InlineKeyboardButton("🔢  Choose status",                      callback_data="q2:choose")],
+        [InlineKeyboardButton("✅  Tasdiqlash  →  6 – Approve For Contract", callback_data="q2:approve")],
+        [InlineKeyboardButton("🔢  Status tanlash",                        callback_data="q2:choose")],
         _NAV_HOME_CANCEL,
     ])
 

@@ -96,11 +96,33 @@ def _reset_flow(context: ContextTypes.DEFAULT_TYPE) -> None:
         context.user_data["bot_msg_id"] = bot_msg_id
 
 
+async def _send_result(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    text: str,
+    **kwargs,
+) -> None:
+    """
+    Delete the flow-prompt message, then send a fresh result.
+    Results are intentionally new messages — not edited in-place — so each
+    completed update leaves a distinct, permanent record in the chat history.
+    """
+    chat_id = update.effective_chat.id
+    old_id = context.user_data.pop("bot_msg_id", None)
+    if old_id:
+        try:
+            await context.bot.delete_message(chat_id, old_id)
+        except Exception:
+            pass
+    msg = await context.bot.send_message(chat_id, text, **kwargs)
+    context.user_data["bot_msg_id"] = msg.message_id
+
+
 # ── /start — entry point ───────────────────────────────────────────────────
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     if not is_allowed(update.effective_user.id):
-        await update.effective_message.reply_text("⛔ You are not authorized to use this bot.")
+        await update.effective_message.reply_text("⛔ Ruxsatingiz yo'q.")
         return ConversationHandler.END
 
     if update.callback_query:
@@ -124,10 +146,10 @@ async def open_approve_flow(
 ) -> int:
     """Triggered when the user taps the reply-keyboard 'BTN_APPROVE' button."""
     if not is_allowed(update.effective_user.id):
-        await update.message.reply_text("⛔ You are not authorized.")
+        await update.message.reply_text("⛔ Ruxsatingiz yo'q.")
         return ConversationHandler.END
 
-    _reset_flow(context)
+    context.user_data.clear()  # full clear — each button tap starts a fresh message
     return await show_service_menu(update, context)
 
 
@@ -138,7 +160,7 @@ async def service_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     await query.answer()
 
     if not is_allowed(query.from_user.id):
-        await query.message.reply_text("⛔ You are not authorized.")
+        await query.message.reply_text("⛔ Ruxsatingiz yo'q.")
         return ConversationHandler.END
 
     labels = {
@@ -164,7 +186,7 @@ async def service_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
 async def handle_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     if not is_allowed(update.effective_user.id):
-        await update.message.reply_text("⛔ You are not authorized.")
+        await update.message.reply_text("⛔ Ruxsatingiz yo'q.")
         return ConversationHandler.END
 
     try:
@@ -260,7 +282,7 @@ async def _execute_update(
         found = await update_status(svc_cfg.dsn, svc_cfg.table, column, value, record_id)
     except Exception as exc:
         logger.error("DB error: %s", exc, exc_info=True)
-        await show(
+        await _send_result(
             update, context,
             "🛑 Ma'lumotlar bazasi xatosi — loglarga qarang.",
             reply_markup=service_menu(),
@@ -275,7 +297,7 @@ async def _execute_update(
         if found
         else f"❌ Yozuv <b>{record_id}</b> jadvalda topilmadi: <i>{svc_cfg.table}</i>."
     )
-    await show(update, context, text, parse_mode="HTML", reply_markup=service_menu())
+    await _send_result(update, context, text, parse_mode="HTML", reply_markup=service_menu())
     _reset_flow(context)
     context.user_data["fsm_state"] = SELECTING_SERVICE
     return SELECTING_SERVICE
@@ -308,12 +330,29 @@ async def nav_back(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
 
 async def nav_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Abort the flow — edit the active message to a cancellation notice."""
+    """
+    Abort the flow — remove the inline prompt and re-pin the main-menu button.
+    edit_message_text can't carry a reply keyboard, so this must send a fresh
+    message (not use show()) or the persistent button never comes back after
+    the user has typed something and collapsed the keyboard.
+    """
     if update.callback_query:
         await update.callback_query.answer()
 
-    await show(update, context, "✖ Bekor qilindi.")
-    _reset_flow(context)
+    chat_id = update.effective_chat.id
+    old_id = context.user_data.get("bot_msg_id")
+    if old_id:
+        try:
+            await context.bot.delete_message(chat_id, old_id)
+        except Exception:
+            pass  # already gone / too old — ignore
+
+    context.user_data.clear()
+    await context.bot.send_message(
+        chat_id,
+        "✖ Bekor qilindi.",
+        reply_markup=main_menu_keyboard(),
+    )
     return ConversationHandler.END
 
 
